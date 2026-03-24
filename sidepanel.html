@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Claude Sidekick</title><link rel="stylesheet" href="sidepanel.css"></head>
+<body>
+<div id="app">
+
+  <!-- ── Login Screen ── -->
+  <div id="login-screen" class="screen">
+    <div class="login-content">
+      <div class="login-icon">🔒</div>
+      <h2>Sign in to Claude</h2>
+      <p>Open <a href="https://claude.ai" target="_blank">claude.ai</a> in a tab and log in. This extension uses your existing session — no API key needed.</p>
+      <div id="login-status" class="login-status"></div>
+      <button id="btn-check-session" class="primary-btn">Check again</button>
+      <p class="login-note">Your session cookie authenticates requests directly to claude.ai</p>
+    </div>
+  </div>
+
+  <!-- ── Main Screen ── -->
+  <div id="main-screen" class="hidden">
+
+    <!-- Header -->
+    <header id="header">
+      <div class="header-left">
+        <div class="logo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="6" fill="#D9733A"/><circle cx="9.5" cy="11" r="1.2" fill="white"/><circle cx="14.5" cy="11" r="1.2" fill="white"/><path d="M9.5 15C9.5 15 10.5 16.5 12 16.5C13.5 16.5 14.5 15 14.5 15" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
+        <h1>Sidekick</h1>
+        <span id="convo-label" class="convo-label"></span>
+      </div>
+      <div class="header-actions">
+        <button id="btn-skills-menu" title="Skills" class="icon-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></button>
+        <button id="btn-history" title="Past chats" class="icon-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
+        <button id="btn-new-chat" title="New chat" class="icon-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+        <button id="btn-settings" title="Settings" class="icon-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.73 12.73l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
+      </div>
+    </header>
+
+    <!-- Session badge (shown in settings) -->
+    <div id="session-badge" class="session-badge disconnected"></div>
+
+    <!-- Context Bar -->
+    <div id="context-bar" class="context-bar hidden">
+      <div class="context-info"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><span id="context-page-title"></span></div>
+      <button id="btn-clear-context" class="context-clear">×</button>
+    </div>
+    <div id="tab-pills" class="tab-pills hidden"></div>
+
+    <!-- Chat Area -->
+    <div id="chat-messages" class="chat-messages"></div>
+
+    <!-- Input -->
+    <div id="input-area" class="input-area">
+      <div class="input-toolbar">
+        <button id="btn-attach-page" class="toolbar-btn active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><span>Page</span></button>
+        <button id="btn-attach-tabs" class="toolbar-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span>@Tabs</span></button>
+      </div>
+      <div id="tab-selector" class="tab-selector hidden"><div class="tab-selector-header">Select tabs</div><div id="tab-selector-list"></div></div>
+      <div id="skills-dropdown" class="skills-dropdown hidden"><div class="skills-dropdown-header">Skills</div><div id="skills-dropdown-list"></div></div>
+      <div class="input-wrapper">
+        <textarea id="chat-input" placeholder="Ask about this page, or type / for skills..." rows="1"></textarea>
+        <button id="btn-send" class="send-btn" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+      </div>
+    </div>
+
+    <!-- History Drawer (slide-in overlay) -->
+    <div id="history-drawer" class="overlay-panel hidden">
+      <div class="panel-header"><h2>Past Chats</h2><button id="btn-close-history" class="icon-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+      <div class="panel-search"><input type="text" id="history-search" placeholder="Search conversations..." /></div>
+      <div id="history-list" class="history-list"><div class="loading">Loading...</div></div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div id="settings-panel" class="overlay-panel hidden">
+      <div class="panel-header"><h2>Settings</h2><button class="icon-btn close-panel" data-panel="settings-panel"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+      <div class="panel-body">
+        <div class="setting-group"><label>Session</label><div id="session-status" class="session-status">Checking...</div></div>
+        <div class="setting-group"><label>Custom Skills</label><p class="setting-desc">Use <code>{{page}}</code> and <code>{{selection}}</code> as variables.</p>
+          <button id="btn-add-skill" class="secondary-btn">+ New Skill</button>
+          <div id="custom-skills-list"></div>
+        </div>
+        <div id="skill-editor" class="skill-editor hidden">
+          <input type="text" id="skill-name" placeholder="Skill name" />
+          <input type="text" id="skill-icon" placeholder="Emoji" maxlength="2" />
+          <textarea id="skill-prompt" placeholder="Prompt template..." rows="4"></textarea>
+          <div class="skill-editor-actions"><button id="btn-save-skill" class="primary-btn">Save</button><button id="btn-cancel-skill" class="secondary-btn">Cancel</button></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /#main-screen -->
+
+</div><!-- /#app -->
+<script src="claude-client.js"></script>
+<script src="sidepanel.js"></script>
+</body>
+</html>
