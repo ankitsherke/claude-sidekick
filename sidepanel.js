@@ -453,6 +453,20 @@ function cleanMessageText(text) {
   return cleaned.trim();
 }
 
+// ─── Smart Truncation ───
+// Truncates text at a paragraph or sentence boundary near the limit
+function smartTruncate(text, maxLen) {
+  if (!text || text.length <= maxLen) return text;
+  // Try to cut at a paragraph boundary (double newline)
+  const cut = text.lastIndexOf('\n\n', maxLen);
+  if (cut > maxLen * 0.7) return text.slice(0, cut) + '\n\n[...content truncated]';
+  // Try sentence boundary
+  const sentEnd = text.lastIndexOf('. ', maxLen);
+  if (sentEnd > maxLen * 0.7) return text.slice(0, sentEnd + 1) + '\n\n[...content truncated]';
+  // Hard cut as last resort
+  return text.slice(0, maxLen) + '\n\n[...content truncated]';
+}
+
 // ─── User Message Cleaner ───
 // When loading history, strip the injected page/tab context from user messages
 // so only the actual question is shown, not the full prompt blob.
@@ -461,8 +475,13 @@ function cleanUserMessage(text) {
   // Extract just the user's question from page-context-injected prompts
   const questionMatch = text.match(/\[My question:\]\n([\s\S]+)$/);
   if (questionMatch) return questionMatch[1].trim();
-  // Strip the [I'm on the page...] header block if no explicit question marker
-  const stripped = text.replace(/^\[I'm on the page:[\s\S]*?\[Page content:\][\s\S]*?\n\n/, '').trim();
+  // Strip the page context header block if no explicit question marker
+  // Handles both old format [I'm on the page:...] and new format [Page:...]
+  const stripped = text
+    .replace(/^\[You are Claude Sidekick[\s\S]*?\[Page content:\][\s\S]*?\n\n/, '')
+    .replace(/^\[I'm on the page:[\s\S]*?\[Page content:\][\s\S]*?\n\n/, '')
+    .replace(/^\[Tab: "[^"]*"\][\s\S]*?\n\n/, '')
+    .trim();
   return stripped || text.trim();
 }
 
@@ -493,7 +512,21 @@ async function handleSend() {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   let fullPrompt = input;
   if (state.attachPage && state.pageContext) {
-    fullPrompt = `[You are Claude Sidekick, an AI assistant embedded in the user's Chrome browser. Timezone: ${tz}. Be concise and use markdown formatting.]\n[I'm on the page: "${state.pageContext.meta?.title}"]\n[URL: ${state.pageContext.meta?.url}]\n[Page content:]\n${state.pageContext.text?.slice(0, 15000)}\n\n[My question:]\n${input}`;
+    const ctx = state.pageContext;
+    const meta = ctx.meta || {};
+
+    // Build metadata header with available info
+    let metaBlock = `[Page: "${meta.title}"]`;
+    metaBlock += `\n[URL: ${meta.url}]`;
+    if (meta.description) metaBlock += `\n[Description: ${meta.description}]`;
+    if (meta.author) metaBlock += `\n[Author: ${meta.author}]`;
+    if (meta.publishedDate) metaBlock += `\n[Published: ${meta.publishedDate}]`;
+    if (meta.type) metaBlock += `\n[Type: ${meta.type}]`;
+
+    // Smart truncation: try to cut at paragraph boundary
+    const pageText = smartTruncate(ctx.text || '', 20000);
+
+    fullPrompt = `[You are Claude Sidekick, an AI assistant embedded in the user's Chrome browser. Timezone: ${tz}. Be concise and use markdown formatting.]\n${metaBlock}\n[Page content:]\n${pageText}\n\n[My question:]\n${input}`;
   }
 
   // Add tab context
@@ -501,7 +534,8 @@ async function handleSend() {
     try {
       const content = await chrome.runtime.sendMessage({ type: 'GET_TAB_CONTENT', tabId: tab.id });
       if (content && !content.error) {
-        fullPrompt = `[Tab: "${tab.title}"]\n${content.text?.slice(0, 8000)}\n\n${fullPrompt}`;
+        const tabText = smartTruncate(content.text || '', 10000);
+        fullPrompt = `[Tab: "${tab.title}"]\n${tabText}\n\n${fullPrompt}`;
       }
     } catch {}
   }
@@ -583,7 +617,7 @@ async function executeSkill(cmd) {
 
   let prompt = skill.prompt;
   if (prompt.includes('{{page}}') && state.pageContext) {
-    prompt = prompt.replace(/\{\{page\}\}/g, state.pageContext.text?.slice(0, 15000) || '');
+    prompt = prompt.replace(/\{\{page\}\}/g, smartTruncate(state.pageContext.text || '', 20000));
   }
   // {{url}} and {{title}} from current page context
   prompt = prompt.replace(/\{\{url\}\}/g, state.pageContext?.meta?.url || '');
@@ -594,9 +628,9 @@ async function executeSkill(cmd) {
     if (tab) {
       const res = await chrome.tabs.sendMessage(tab.id, { type: 'GET_SELECTED_TEXT' });
       if (res?.text) prompt = prompt.replace(/\{\{selection\}\}/g, res.text);
-      else prompt = prompt.replace(/\{\{selection\}\}/g, state.pageContext?.text?.slice(0, 5000) || '');
+      else prompt = prompt.replace(/\{\{selection\}\}/g, smartTruncate(state.pageContext?.text || '', 8000));
     }
-  } catch { prompt = prompt.replace(/\{\{selection\}\}/g, state.pageContext?.text?.slice(0, 5000) || ''); }
+  } catch { prompt = prompt.replace(/\{\{selection\}\}/g, smartTruncate(state.pageContext?.text || '', 8000)); }
 
   await sendToClaude(prompt);
 }

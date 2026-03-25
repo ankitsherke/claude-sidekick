@@ -142,75 +142,211 @@ async function getGoogleWorkspaceContent(tab) {
         charCount: text.length,
         extractionMethod: type,
       };
-    } catch { return null; }
+    } catch { /* fall through to return null, caller will try DOM extraction */ }
   }
   return null;
 }
 
+// ─── Content Cache ───
+const contentCache = new Map();
+const CACHE_TTL = 30000; // 30 seconds
+
+function getCachedContent(tabId) {
+  const entry = contentCache.get(tabId);
+  if (entry && Date.now() - entry.timestamp < CACHE_TTL) return entry.data;
+  contentCache.delete(tabId);
+  return null;
+}
+
+// Invalidate cache on navigation
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.url || changeInfo.status === 'loading') contentCache.delete(tabId);
+});
+chrome.tabs.onRemoved.addListener((tabId) => contentCache.delete(tabId));
+
 // ─── Page Content Extraction ───
 async function getPageContent(tabId) {
+  // Check cache first
+  const cached = getCachedContent(tabId);
+  if (cached) return cached;
+
   try {
     // Special-case Google Workspace apps: DOM is canvas-based, use export URL instead
     const tab = await chrome.tabs.get(tabId);
     const gwContent = await getGoogleWorkspaceContent(tab);
-    if (gwContent) return gwContent;
+    if (gwContent) {
+      contentCache.set(tabId, { data: gwContent, timestamp: Date.now() });
+      return gwContent;
+    }
 
     const results = await chrome.scripting.executeScript({
       target: { tabId },
       func: () => {
-        // ── Method 1: Accessibility Tree ──────────────────────────────
-        const ROLE_MAP = {
-          A:'link', BUTTON:'button', INPUT:'textbox', TEXTAREA:'textbox',
-          SELECT:'listbox', H1:'heading', H2:'heading', H3:'heading',
-          H4:'heading', H5:'heading', H6:'heading', IMG:'image',
-          TABLE:'table', TR:'row', TD:'cell', TH:'columnheader',
-          FORM:'form', NAV:'navigation', MAIN:'main', ASIDE:'complementary',
-          HEADER:'banner', FOOTER:'contentinfo', SECTION:'region',
-          ARTICLE:'article', LI:'listitem', UL:'list', OL:'list',
-          P:'paragraph', LABEL:'label', DETAILS:'group', SUMMARY:'button',
-          DIALOG:'dialog', BLOCKQUOTE:'blockquote', CODE:'code', PRE:'code',
-        };
-        const SKIP = new Set(['SCRIPT','STYLE','NOSCRIPT','IFRAME','META','LINK','HEAD','SVG']);
+        const SKIP = new Set(['SCRIPT','STYLE','NOSCRIPT','META','LINK','HEAD']);
 
-        function getAccessibleName(el) {
-          return el.getAttribute('aria-label') ||
-                 el.getAttribute('placeholder') ||
-                 el.getAttribute('title') ||
-                 el.getAttribute('alt') ||
-                 (el.id ? document.querySelector(`label[for="${el.id}"]`)?.textContent.trim() : '') ||
-                 el.textContent.trim().slice(0, 120) || '';
-        }
+        // ── Noise removal selectors (expanded) ──────────────────────
+        const noiseSelectors = [
+          'script','style','noscript','iframe','svg',
+          'nav','footer','header',
+          '[role="banner"]','[role="navigation"]','[role="complementary"]',
+          '[aria-hidden="true"]',
+          '.ad','.ads','.advert','.advertisement','[data-ad]','[data-testid="ad"]',
+          '.sidebar','.popup','.modal','.overlay',
+          '.cookie-banner','.cookie-consent','#cookie-consent','#gdpr',
+          '.social-share','.share-buttons','.social-links',
+          '.newsletter-signup','.subscribe-form',
+          '.related-posts','.recommended','.suggestions',
+          '.breadcrumb','.breadcrumbs',
+          '.comment-form','.comments-section',
+          '#comments','.disqus',
+        ];
 
-        function getRole(el) {
-          return el.getAttribute('role') || ROLE_MAP[el.tagName] || el.tagName.toLowerCase();
-        }
+        // ── Method 1: Markdown-aware content extraction ─────────────
+        function domToMarkdown(root, maxLen) {
+          let md = '';
+          const append = (s) => { if (md.length < maxLen) md += s; };
 
-        let tree = '';
-        let refId = 0;
-        function walkTree(node, depth) {
-          if (depth > 15 || tree.length > 50000) return;
-          if (node.nodeType !== 1) return;
-          if (SKIP.has(node.tagName)) return;
-          if (node.hidden || node.getAttribute('aria-hidden') === 'true') return;
-          const role = getRole(node);
-          const name = getAccessibleName(node);
-          if (name || ROLE_MAP[node.tagName]) {
-            tree += '  '.repeat(depth) + `${role} "${name.slice(0,120)}" [${refId++}]\n`;
+          function walk(node) {
+            if (md.length >= maxLen) return;
+            if (node.nodeType === 3) { // Text node
+              const t = node.textContent.replace(/[ \t]+/g, ' ');
+              if (t.trim()) append(t);
+              return;
+            }
+            if (node.nodeType !== 1) return;
+            if (SKIP.has(node.tagName)) return;
+            if (node.hidden || node.getAttribute('aria-hidden') === 'true') return;
+
+            const tag = node.tagName;
+
+            // Headings → markdown headings
+            if (/^H[1-6]$/.test(tag)) {
+              const level = parseInt(tag[1]);
+              append('\n\n' + '#'.repeat(level) + ' ' + node.textContent.trim() + '\n\n');
+              return;
+            }
+
+            // Links → [text](url)
+            if (tag === 'A') {
+              const href = node.getAttribute('href') || '';
+              const text = node.textContent.trim();
+              if (text && href && !href.startsWith('javascript:')) {
+                append(`[${text}](${href})`);
+              } else if (text) {
+                append(text);
+              }
+              return;
+            }
+
+            // Images → ![alt](src)
+            if (tag === 'IMG') {
+              const alt = node.getAttribute('alt') || '';
+              if (alt) append(`[Image: ${alt}]`);
+              return;
+            }
+
+            // Code blocks
+            if (tag === 'PRE') {
+              const code = node.querySelector('code');
+              const lang = code?.className?.match(/language-(\w+)/)?.[1] || '';
+              append('\n\n```' + lang + '\n' + node.textContent.trim() + '\n```\n\n');
+              return;
+            }
+            if (tag === 'CODE' && node.parentElement?.tagName !== 'PRE') {
+              append('`' + node.textContent + '`');
+              return;
+            }
+
+            // Blockquotes
+            if (tag === 'BLOCKQUOTE') {
+              const lines = node.textContent.trim().split('\n');
+              append('\n\n' + lines.map(l => '> ' + l.trim()).join('\n') + '\n\n');
+              return;
+            }
+
+            // Tables → markdown tables
+            if (tag === 'TABLE') {
+              const rows = [...node.querySelectorAll('tr')].slice(0, 50);
+              let tableStr = '\n\n';
+              rows.forEach((row, i) => {
+                const cells = [...row.querySelectorAll('th, td')].map(c => c.textContent.trim().replace(/\|/g, '\\|'));
+                tableStr += '| ' + cells.join(' | ') + ' |\n';
+                if (i === 0) tableStr += '| ' + cells.map(() => '---').join(' | ') + ' |\n';
+              });
+              append(tableStr + '\n');
+              return;
+            }
+
+            // Lists
+            if (tag === 'UL' || tag === 'OL') {
+              append('\n');
+              [...node.children].forEach((li, i) => {
+                if (li.tagName === 'LI') {
+                  const prefix = tag === 'OL' ? `${i + 1}. ` : '- ';
+                  append(prefix + li.textContent.trim().replace(/\n+/g, ' ') + '\n');
+                }
+              });
+              append('\n');
+              return;
+            }
+
+            // Paragraphs and divs
+            if (tag === 'P' || tag === 'DIV') {
+              append('\n\n');
+              for (const child of node.childNodes) walk(child);
+              append('\n');
+              return;
+            }
+
+            // Line breaks
+            if (tag === 'BR') { append('\n'); return; }
+            if (tag === 'HR') { append('\n\n---\n\n'); return; }
+
+            // Bold / italic / strong / em
+            if (tag === 'STRONG' || tag === 'B') {
+              append('**' + node.textContent.trim() + '**');
+              return;
+            }
+            if (tag === 'EM' || tag === 'I') {
+              append('*' + node.textContent.trim() + '*');
+              return;
+            }
+
+            // Default: recurse into children
+            for (const child of node.childNodes) walk(child);
           }
-          for (const child of node.children) walkTree(child, depth + 1);
+
+          walk(root);
+          // Clean up excessive whitespace
+          return md.replace(/\n{3,}/g, '\n\n').replace(/[ \t]+/g, ' ').trim();
         }
-        try { walkTree(document.body, 0); } catch (e) { tree = ''; }
 
-        // ── Method 2: Semantic Text ────────────────────────────────────
-        const noiseSelectors = ['script','style','noscript','iframe','svg','nav','footer','header',
-          '[role="banner"]','[role="navigation"]','.ad','.ads','.sidebar','.popup','.modal','.cookie-banner'];
+        // ── Remove noise elements ───────────────────────────────────
         const clone = document.body.cloneNode(true);
-        noiseSelectors.forEach(s => { try { clone.querySelectorAll(s).forEach(el => el.remove()); } catch {} });
-        const main = clone.querySelector('main, article, [role="main"], .content, .post, .entry-content');
-        const text = (main || clone).innerText
-          .replace(/\n{3,}/g, '\n\n').replace(/[ \t]+/g, ' ').trim().slice(0, 30000);
+        noiseSelectors.forEach(s => {
+          try { clone.querySelectorAll(s).forEach(el => el.remove()); } catch {}
+        });
 
-        // ── Metadata ──────────────────────────────────────────────────
+        // ── Find main content region ────────────────────────────────
+        const mainEl = clone.querySelector(
+          'main, article, [role="main"], .post-content, .article-body, ' +
+          '.entry-content, .post-body, .story-body, .content-body, ' +
+          '#content, .content, .post, .entry-content'
+        );
+
+        const contentRoot = mainEl || clone;
+
+        // ── Extract structured markdown ──────────────────────────────
+        const markdownText = domToMarkdown(contentRoot, 50000);
+
+        // ── Fallback: plain innerText if markdown is too short ───────
+        let text;
+        const plainText = contentRoot.innerText
+          .replace(/\n{3,}/g, '\n\n').replace(/[ \t]+/g, ' ').trim().slice(0, 30000);
+        // Use markdown if it captured meaningful content, else fallback
+        text = markdownText.length > plainText.length * 0.3 ? markdownText : plainText;
+
+        // ── Metadata (expanded) ─────────────────────────────────────
         const meta = {
           title: document.title,
           url: window.location.href,
@@ -218,14 +354,26 @@ async function getPageContent(tabId) {
           ogTitle: document.querySelector('meta[property="og:title"]')?.content || '',
           ogImage: document.querySelector('meta[property="og:image"]')?.content || '',
           canonical: document.querySelector('link[rel="canonical"]')?.href || '',
-          h1: [...document.querySelectorAll('h1')].map(h => h.textContent.trim()).slice(0, 3),
+          h1: [...document.querySelectorAll('h1')].map(h => h.textContent.trim()).slice(0, 5),
+          headings: [...document.querySelectorAll('h1, h2, h3')].map(h => ({
+            level: parseInt(h.tagName[1]),
+            text: h.textContent.trim()
+          })).slice(0, 20),
           hasCanvas: document.querySelectorAll('canvas').length > 0,
+          lang: document.documentElement.lang || '',
+          type: document.querySelector('meta[property="og:type"]')?.content || '',
+          author: document.querySelector('meta[name="author"]')?.content
+                  || document.querySelector('[rel="author"]')?.textContent?.trim() || '',
+          publishedDate: document.querySelector('meta[property="article:published_time"]')?.content
+                  || document.querySelector('time[datetime]')?.getAttribute('datetime') || '',
         };
 
-        return { text, accessibilityTree: tree.slice(0, 50000), meta, charCount: text.length };
+        return { text, meta, charCount: text.length };
       }
     });
-    return results[0]?.result || { error: "No content" };
+    const result = results[0]?.result || { error: "No content" };
+    if (!result.error) contentCache.set(tabId, { data: result, timestamp: Date.now() });
+    return result;
   } catch (e) {
     return { error: e.message };
   }
