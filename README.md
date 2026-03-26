@@ -6,7 +6,8 @@ Claude Sidekick is a Chrome extension that gives Claude full context of your bro
 
 No API key. No extra subscription. No setup.
 
-<!-- ![Demo](assets/demo.gif) -->
+![Claude-Sidekick](https://github.com/user-attachments/assets/ff29ca20-0a0b-4aa1-ba25-59c670f2bcd3)
+
 
 ---
 
@@ -53,7 +54,8 @@ Claude Sidekick is a **reading companion**. It reads what you're reading and hel
 
 Opens a side panel that reads your current page and lets you ask questions about it. Refreshes automatically when you switch tabs.
 
-![Page-aware chat](assets/screenshot-wikipedia-summary.png)
+<img width="3420" height="2150" alt="image" src="https://github.com/user-attachments/assets/08b3de07-2790-4708-8a04-533ba5ac9eb1" />
+
 
 ### Skills (/commands)
 
@@ -72,19 +74,21 @@ Opens a side panel that reads your current page and lets you ask questions about
 | `/translate` | Translate to/from English |
 | `/proofread` | Fix grammar and spelling |
 
-![Slash commands](assets/screenshot-skills-list.png)
+<img width="3420" height="2170" alt="image" src="https://github.com/user-attachments/assets/577f1ed5-398d-49a7-9cce-7f6ceab6ca75" />
+
 
 ### Google Workspace Support
 
 Reads **Google Docs, Sheets, and Slides** — even though they use canvas rendering. Uses the export API with your existing Google session. Most browser extensions can't do this.
 
-![Google Docs](assets/screenshot-google-docs-actions.png)
+<img width="3420" height="2158" alt="image" src="https://github.com/user-attachments/assets/c9667380-b6e2-4035-91d9-cbd7cf6c899d" />
+
 
 ### @Tab References
 
 Type `@` in the chat or click **@Tabs** to pull content from any open tab into the conversation. Compare documents, cross-reference sources, connect information across tabs.
 
-![Tab references](assets/screenshot-tab-references.png)
+
 
 ### Text Selection Tooltip
 
