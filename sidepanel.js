@@ -741,18 +741,15 @@ function renderWelcome() {
   msgs.innerHTML = `
     <div class="welcome-screen">
       <div class="welcome-icon">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="6" fill="#D9733A"/>
-        <path d="M7 8.5C7 8.5 9.5 7 12 7C14.5 7 17 8.5 17 8.5" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
-        <circle cx="9.5" cy="12" r="1.2" fill="white"/><circle cx="14.5" cy="12" r="1.2" fill="white"/>
-        <path d="M9.5 15.5C9.5 15.5 10.5 17 12 17C13.5 17 14.5 15.5 14.5 15.5" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <svg width="40" height="40" viewBox="0 0 360 360" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M138.21,360H241.53V231.8H360V128.48H302.07a148.93,148.93,0,0,0-106.35,44.66L180.8,188.36a149,149,0,0,0-42.59,104.27Z"/><path d="M236.91,0C225.25,120.58,123.65,214.82,0,214.82V112.34A135.61,135.61,0,0,0,133.59,0Z"/></svg>
       </div>
       <h2>What can I help with?</h2>
       <p class="welcome-sub">I can read this page, answer questions, and access your Claude conversations.</p>
       <div class="quick-actions">
-        <button class="quick-action" data-action="summarize">📋 Summarize page</button>
-        <button class="quick-action" data-action="key-points">⭐ Key points</button>
-        <button class="quick-action" data-action="eli5">🧒 ELI5</button>
-        <button class="quick-action" data-action="qa">💬 Q&A this page</button>
+        <button class="quick-action" data-action="summarize">Summarize page</button>
+        <button class="quick-action" data-action="key-points">Key points</button>
+        <button class="quick-action" data-action="eli5">ELI5</button>
+        <button class="quick-action" data-action="qa">Q&amp;A this page</button>
       </div>
     </div>`;
 }

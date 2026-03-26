@@ -1,40 +1,63 @@
 # Claude Sidekick
 
-A Chrome extension that brings the [Dia browser](https://dia.so) AI assistant experience to Chrome — powered by your existing **claude.ai account**. No API key, no extra subscriptions.
+**Ever wished you could just ask Claude about the page you're reading — without copy-pasting anything?**
 
-> Built for early testers. Uses claude.ai's internal API via your browser session.
+Claude Sidekick is a Chrome extension that gives Claude full context of your browser. Press `⌘E` on any webpage, and a side panel opens that already knows what you're looking at. Ask questions, run commands, pull in other tabs — all powered by your existing claude.ai account.
 
-![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-4285F4?logo=googlechrome&logoColor=white)
-![Manifest V3](https://img.shields.io/badge/Manifest-V3-green)
-![No API Key](https://img.shields.io/badge/API%20Key-Not%20Required-brightgreen)
+No API key. No extra subscription. No setup.
+
+<!-- ![Demo](assets/demo.gif) -->
 
 ---
 
-## Install (Developer Mode)
+## How It Works
 
-1. **Log into [claude.ai](https://claude.ai)** in Chrome first
-2. Download this repo → click **Code → Download ZIP**, then unzip it
-3. Go to `chrome://extensions/` → enable **Developer mode** (top right)
-4. Click **Load unpacked** → select the unzipped folder
-5. Press **Cmd+E** (Mac) or **Ctrl+E** (Windows) on any page
+```
+You're reading an article, a Google Doc, or reviewing code on GitHub.
+You press ⌘E (or Ctrl+E).
+A side panel opens. It already has the page content.
+You ask a question. Claude answers with full context.
+That's it.
+```
 
-That's it. No API key, no configuration.
+The extension reads your `claude.ai` session cookies and calls the same API your browser does. Your messages go through claude.ai and count against your normal usage quota (Free or Pro). No intermediary servers. No stored credentials. Direct browser → claude.ai.
+
+---
+
+## How Is This Different from Claude in Chrome?
+
+Anthropic's official **Claude in Chrome** extension is a browser *automation agent* — it clicks buttons, fills forms, and navigates websites on your behalf. It's powerful, but it's designed for a different job.
+
+Claude Sidekick is a **reading companion**. It reads what you're reading and helps you think about it.
+
+| | Claude Sidekick | Claude in Chrome (Anthropic) |
+|---|---|---|
+| **What it does** | Reads page content, answers questions, summarizes, extracts info | Automates browser tasks — clicks, fills forms, navigates |
+| **Primary use** | Understanding content you're already looking at | Doing repetitive browser workflows for you |
+| **Subscription required** | No — works with Free and Pro accounts | Yes — paid plans only (Pro/Max/Team/Enterprise) |
+| **Model access** | Uses whatever model your claude.ai session uses | Pro limited to Haiku 4.5; Max/Team get Sonnet/Opus |
+| **Google Docs/Sheets/Slides** | ✅ Reads content natively via export API | ✅ Can interact with Google Workspace |
+| **@Tab references** | ✅ Pull content from any open tab into chat | Tab grouping for multi-tab automation |
+| **Slash commands** | ✅ 10 built-in + custom skills | Workflow recording + shortcuts |
+| **Open source** | ✅ Yes — inspect every line | ❌ Closed source |
+| **API key needed** | ❌ No | ❌ No (but needs paid subscription) |
+| **Privacy** | Page content sent to Claude only when you ask | Claude sees and interacts with pages actively |
+
+**Think of it this way:** Claude in Chrome is your hands. Claude Sidekick is your reading glasses.
 
 ---
 
 ## Features
 
 ### Page-Aware Chat
+
 Opens a side panel that reads your current page and lets you ask questions about it. Refreshes automatically when you switch tabs.
 
-### Google Workspace Support
-Reads **Google Docs, Sheets, and Slides** — even though they use canvas rendering. Uses the export API with your existing Google session.
+![Page-aware chat](assets/screenshot-wikipedia-summary.png)
 
-### @Tab References
-Type `@` in the chat input or click **@Tabs** to pull content from any open tab into the conversation.
+### Skills (/commands)
 
-### Skills (`/commands`)
-10 built-in slash commands:
+10 built-in slash commands. Create your own with `{{page}}`, `{{selection}}`, `{{url}}`, `{{title}}` variables.
 
 | Command | What it does |
 |---|---|
@@ -49,49 +72,53 @@ Type `@` in the chat input or click **@Tabs** to pull content from any open tab 
 | `/translate` | Translate to/from English |
 | `/proofread` | Fix grammar and spelling |
 
-Create your own skills in Settings using `{{page}}`, `{{selection}}`, `{{url}}`, `{{title}}` variables.
+![Slash commands](assets/screenshot-skills-list.png)
+
+### Google Workspace Support
+
+Reads **Google Docs, Sheets, and Slides** — even though they use canvas rendering. Uses the export API with your existing Google session. Most browser extensions can't do this.
+
+![Google Docs](assets/screenshot-google-docs-actions.png)
+
+### @Tab References
+
+Type `@` in the chat or click **@Tabs** to pull content from any open tab into the conversation. Compare documents, cross-reference sources, connect information across tabs.
+
+![Tab references](assets/screenshot-tab-references.png)
 
 ### Text Selection Tooltip
-Highlight any text on a page → **Ask / Explain / Summarize** buttons appear.
 
-### Past Conversations
-Full claude.ai conversation history accessible from the sidebar. Resume, rename, or delete any past chat.
+Highlight any text on a page → **Ask | Explain | Summarize** buttons appear. The AI is always one highlight away.
 
 ### Real-Time Streaming
+
 Responses stream token-by-token, just like on claude.ai.
 
----
+### Past Conversations
 
-## How It Works
-
-The extension reads your `claude.ai` session cookies and calls claude.ai's internal API directly. Your messages go through claude.ai and count against your normal usage quota (Free or Pro).
-
-```
-Chrome Browser
-├── claude.ai tab  ← you must be logged in here
-│
-└── Claude Sidekick Extension
-    ├── Reads claude.ai session cookies
-    ├── Calls claude.ai/api/* endpoints (SSE streaming)
-    └── Content scripts read page text + handle text selection
-```
-
-**No intermediary servers. No stored credentials. Direct browser → claude.ai.**
+Full claude.ai conversation history accessible from the sidebar. Resume, rename, or delete any past chat.
 
 ---
 
-## Permissions
+## Install (2 minutes)
 
-| Permission | Why |
-|---|---|
-| `activeTab` + `scripting` | Read the current page's content |
-| `tabs` | List open tabs for @Tab references |
-| `storage` | Save custom skills and preferences |
-| `cookies` | Read your claude.ai session |
-| `sidePanel` | Render the chat UI as a side panel |
-| `contextMenus` | Right-click "Ask Claude" actions |
-| `host: claude.ai/*` | Call the claude.ai API |
-| `host: <all_urls>` | Extract content from any webpage |
+1. **Log into [claude.ai](https://claude.ai)** in Chrome
+2. **Download this repo** → Code → Download ZIP → unzip
+3. Go to `chrome://extensions/` → enable **Developer mode** (top right)
+4. Click **Load unpacked** → select the unzipped folder
+5. Press **⌘E** (Mac) or **Ctrl+E** (Windows) on any page
+
+That's it. No API key, no configuration, no account creation.
+
+---
+
+## Privacy
+
+- No data leaves your browser except to claude.ai (same as normal usage)
+- Page content is sent to Claude only when you ask a question
+- Custom skills are stored locally in Chrome storage
+- No analytics, no tracking, no intermediary servers
+- Fully open source — read every line of code
 
 ---
 
@@ -99,8 +126,8 @@ Chrome Browser
 
 - Requires an active claude.ai session (Free or Pro)
 - Uses claude.ai's **unofficial** internal API — may break if Anthropic changes endpoints
-- Memory system (browsing personalization) not yet implemented
-- Omnibox integration not yet implemented
+- Memory/personalization not yet implemented
+- Not available on the Chrome Web Store (developer mode only for now)
 
 ---
 
@@ -120,12 +147,15 @@ claude-sidekick/
 
 ---
 
-## Privacy
+## Contributing
 
-- No data leaves your browser except to claude.ai (same as normal claude.ai usage)
-- Page content is sent to Claude only when you ask a question
-- Custom skills are stored locally in Chrome storage
-- No analytics, no tracking
+PRs welcome. If you find a bug or have a feature idea, open an issue.
+
+---
+
+## License
+
+MIT
 
 ---
 
