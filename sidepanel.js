@@ -784,7 +784,7 @@ async function populateTabSelector() {
   available.forEach(tab => {
     const item = document.createElement('div');
     item.className = 'tab-selector-item';
-    item.innerHTML = `<img src="${tab.favIconUrl || ''}" onerror="this.style.display='none'"/><span>${escHtml(tab.title)}</span>`;
+    item.innerHTML = `<img src="${tab.favIconUrl || ''}" /><span>${escHtml(tab.title)}</span>`;
     item.addEventListener('click', () => {
       state.referencedTabs.push(tab);
       renderTabPills();
@@ -806,7 +806,7 @@ function renderTabPills() {
   state.referencedTabs.forEach(tab => {
     const pill = document.createElement('div');
     pill.className = 'tab-pill';
-    pill.innerHTML = `<img src="${tab.favIconUrl||''}" onerror="this.style.display='none'"/><span>${escHtml(tab.title.slice(0,30))}</span><span class="rm" data-id="${tab.id}">×</span>`;
+    pill.innerHTML = `<img src="${tab.favIconUrl||''}" /><span>${escHtml(tab.title.slice(0,30))}</span><span class="rm" data-id="${tab.id}">×</span>`;
     pill.querySelector('.rm').addEventListener('click', () => {
       state.referencedTabs = state.referencedTabs.filter(t => t.id !== tab.id);
       renderTabPills();
