@@ -1,8 +1,8 @@
-# Claude Sidekick
+# Parsely - Browser Copilot
 
 **Ever wished you could just ask Claude about the page you're reading — without copy-pasting anything?**
 
-Claude Sidekick is a Chrome extension that gives Claude full context of your browser. Press `⌘E` on any webpage, and a side panel opens that already knows what you're looking at. Ask questions, run commands, pull in other tabs — all powered by your existing claude.ai account.
+Parsely - Browser Copilot is a Chrome extension that gives Claude full context of your browser. Press `⌘E` on any webpage, and a side panel opens that already knows what you're looking at. Ask questions, run commands, pull in other tabs — all powered by your existing claude.ai account.
 
 No API key. No extra subscription. No setup.
 
@@ -29,9 +29,9 @@ The extension reads your `claude.ai` session cookies and calls the same API your
 
 Anthropic's official **Claude in Chrome** extension is a browser *automation agent* — it clicks buttons, fills forms, and navigates websites on your behalf. It's powerful, but it's designed for a different job.
 
-Claude Sidekick is a **reading companion**. It reads what you're reading and helps you think about it.
+Parsely - Browser Copilot is a **reading companion**. It reads what you're reading and helps you think about it.
 
-| | Claude Sidekick | Claude in Chrome (Anthropic) |
+| | Parsely - Browser Copilot | Claude in Chrome (Anthropic) |
 |---|---|---|
 | **What it does** | Reads page content, answers questions, summarizes, extracts info | Automates browser tasks — clicks, fills forms, navigates |
 | **Primary use** | Understanding content you're already looking at | Doing repetitive browser workflows for you |
@@ -44,7 +44,7 @@ Claude Sidekick is a **reading companion**. It reads what you're reading and hel
 | **API key needed** | ❌ No | ❌ No (but needs paid subscription) |
 | **Privacy** | Page content sent to Claude only when you ask | Claude sees and interacts with pages actively |
 
-**Think of it this way:** Claude in Chrome is your hands. Claude Sidekick is your reading glasses.
+**Think of it this way:** Claude in Chrome is your hands. Parsely - Browser Copilot is your reading glasses.
 
 ---
 
@@ -138,7 +138,7 @@ That's it. No API key, no configuration, no account creation.
 ## File Structure
 
 ```
-claude-sidekick/
+parsely/
 ├── manifest.json         # MV3 config
 ├── background.js         # Service worker — routing, extraction, Google Workspace
 ├── claude-client.js      # claude.ai session API client (SSE streaming)

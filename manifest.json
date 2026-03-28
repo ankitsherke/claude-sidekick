@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Claude Sidekick — AI Browser Agent",
-  "version": "2.0.0",
-  "description": "Dia-style AI assistant powered by your Claude.ai account. No API key needed. Read pages, chat with tabs, use Skills, access past conversations.",
+  "name": "Parsely - Browser Copilot",
+  "version": "2.1.0",
+  "description": "AI browser copilot powered by your claude.ai account. No API key needed. Read any page, ask questions, summarize, translate, review code, and access past chats.",
+  "minimum_chrome_version": "116",
   "permissions": [
     "activeTab",
     "storage",
@@ -28,7 +29,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "Claude Sidekick"
+    "default_title": "Parsely"
   },
   "content_scripts": [
     {
@@ -43,7 +44,7 @@
         "default": "Ctrl+E",
         "mac": "Command+E"
       },
-      "description": "Open Claude Sidekick panel"
+      "description": "Open Parsely panel"
     }
   },
   "icons": {

@@ -1,4 +1,4 @@
-/* Claude Sidekick — Text Selection Tooltip
+/* Parsely - Browser Copilot — Text Selection Tooltip
    Injected into page context; CSS variables from the host page
    are not available here, so values are hardcoded per the design system.
    Light/dark handled via prefers-color-scheme.

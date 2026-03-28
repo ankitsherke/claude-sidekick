@@ -1,4 +1,4 @@
-// ─── Claude Sidekick v2 — Session-Based ───
+// ─── Parsely - Browser Copilot v2 — Session-Based ───
 
 const $ = sel => document.querySelector(sel);
 const $$ = sel => document.querySelectorAll(sel);
@@ -9,8 +9,11 @@ let state = {
   attachPage: true,
   referencedTabs: [],
   conversations: [],
+  projects: [],
   isStreaming: false,
-  customSkills: []
+  customSkills: [],
+  attachedFiles: [],
+  pendingTitle: null
 };
 
 const SKILLS = [
@@ -150,9 +153,12 @@ function setupEvents() {
   $('#btn-new-chat').addEventListener('click', () => {
     state.currentConvoId = null;
     state.referencedTabs = [];
+    state.attachedFiles = [];
+    state.pendingTitle = null;
     $('#tab-pills').classList.add('hidden');
     $('#tab-pills').innerHTML = '';
     $('#convo-label').textContent = '';
+    renderAttachmentPills();
     renderWelcome();
   });
 
@@ -168,6 +174,15 @@ function setupEvents() {
     if (state.attachPage && !state.pageContext) loadPageContext();
   });
 
+  // Clear page context (× button in toolbar)
+  $('#btn-clear-page').addEventListener('click', () => {
+    state.pageContext = null;
+    state.attachPage = false;
+    $('#btn-attach-page').classList.remove('active');
+    $('#page-label').textContent = 'Page';
+    $('#btn-clear-page').classList.add('hidden');
+  });
+
   // Tab reference
   $('#btn-attach-tabs').addEventListener('click', () => {
     const sel = $('#tab-selector');
@@ -180,14 +195,6 @@ function setupEvents() {
     const dd = $('#skills-dropdown');
     if (dd.classList.contains('hidden')) showSkillsDropdown('/');
     else dd.classList.add('hidden');
-  });
-
-  // Clear context
-  $('#btn-clear-context').addEventListener('click', () => {
-    state.pageContext = null;
-    state.attachPage = false;
-    $('#context-bar').classList.add('hidden');
-    $('#btn-attach-page').classList.remove('active');
   });
 
   // Quick actions (delegated)
@@ -255,6 +262,20 @@ function setupEvents() {
     $('#skill-editor').classList.add('hidden');
   });
 
+  // File attachment
+  $('#btn-attach-file').addEventListener('click', () => $('#file-input').click());
+  $('#file-input').addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files);
+    for (const file of files) {
+      try {
+        const content = await readFileAsText(file);
+        state.attachedFiles.push({ name: file.name, content, size: file.size });
+      } catch {}
+    }
+    e.target.value = '';
+    renderAttachmentPills();
+  });
+
   // Auto-refresh page context when the active tab navigates or switches (500ms debounce)
   let contextDebounceTimer = null;
   function debouncedLoadPageContext() {
@@ -276,12 +297,12 @@ async function loadPageContext() {
     const resp = await chrome.runtime.sendMessage({ type: 'GET_PAGE_CONTENT', tabId: tab.id });
     if (resp && !resp.error) {
       state.pageContext = resp;
+      const pageTitle = resp.meta?.title || tab.title || 'Page';
+      const truncated = pageTitle.length > 28 ? pageTitle.slice(0, 26) + '…' : pageTitle;
+      $('#page-label').textContent = truncated;
+      $('#btn-clear-page').classList.remove('hidden');
       if (state.attachPage) {
-        const label = resp.extractionMethod
-          ? `${resp.meta?.title || tab.title} (${resp.extractionMethod})`
-          : (resp.meta?.title || tab.title);
-        $('#context-page-title').textContent = label;
-        $('#context-bar').classList.remove('hidden');
+        $('#btn-attach-page').classList.add('active');
       }
     }
   } catch {}
@@ -293,8 +314,12 @@ async function openHistory() {
   $('#history-list').innerHTML = '<div class="history-loading">Loading...</div>';
 
   try {
-    const convos = await claudeClient.listConversations();
-    state.conversations = convos || [];
+    const [convos, projects] = await Promise.allSettled([
+      claudeClient.listConversations(),
+      claudeClient.listProjects()
+    ]);
+    state.conversations = (convos.status === 'fulfilled' ? convos.value : null) || [];
+    state.projects = (projects.status === 'fulfilled' ? projects.value : null) || [];
     renderHistory(state.conversations);
   } catch (err) {
     $('#history-list').innerHTML = `<div class="history-empty">Failed to load: ${err.message}</div>`;
@@ -304,6 +329,10 @@ async function openHistory() {
 function renderHistory(convos) {
   const list = $('#history-list');
   if (!convos.length) { list.innerHTML = '<div class="history-empty">No conversations yet</div>'; return; }
+
+  // Build project lookup map
+  const projectMap = {};
+  (state.projects || []).forEach(p => { projectMap[p.uuid] = p.name || 'Project'; });
 
   // Group by time
   const now = Date.now();
@@ -326,12 +355,17 @@ function renderHistory(convos) {
     items.forEach(c => {
       const title = c.name || c.summary || 'Untitled';
       const date = new Date(c.updated_at || c.created_at).toLocaleDateString();
+      const projectName = c.project_uuid ? (projectMap[c.project_uuid] || 'Project') : null;
+      const projectBadge = projectName ? `<span class="hi-project">${escHtml(projectName)}</span>` : '';
       h += `<div class="history-item" data-id="${c.uuid}">
         <span class="hi-icon">💬</span>
-        <div class="hi-info"><div class="hi-title">${escHtml(title)}</div><div class="hi-date">${date}</div></div>
+        <div class="hi-info">
+          <div class="hi-title">${escHtml(title)}</div>
+          <div class="hi-date">${projectBadge}${date}</div>
+        </div>
         <div class="hi-actions">
-          <button class="hi-rename icon-btn" data-id="${c.uuid}" data-title="${escHtml(title)}" title="Rename">✏️</button>
-          <button class="hi-delete icon-btn" data-id="${c.uuid}" title="Delete">🗑️</button>
+          <button class="hi-rename icon-btn" data-id="${c.uuid}" title="Rename"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+          <button class="hi-delete icon-btn" data-id="${c.uuid}" title="Delete"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
         </div>
       </div>`;
     });
@@ -345,6 +379,7 @@ function renderHistory(convos) {
 
   list.innerHTML = html;
 
+  // Click to load conversation
   list.querySelectorAll('.history-item').forEach(item => {
     item.addEventListener('click', (e) => {
       if (e.target.closest('.hi-actions')) return;
@@ -352,10 +387,26 @@ function renderHistory(convos) {
     });
   });
 
+  // Inline delete (two-step confirmation)
   list.querySelectorAll('.hi-delete').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (!confirm('Delete this conversation?')) return;
+      if (btn.dataset.confirming !== '1') {
+        btn.dataset.confirming = '1';
+        const origHTML = btn.innerHTML;
+        btn.textContent = 'Delete?';
+        btn.style.cssText = 'color:var(--error);font-size:10px;padding:2px 5px;border:1px solid var(--error);border-radius:3px;background:none;cursor:pointer;';
+        const cancelFn = (ev) => {
+          if (!btn.contains(ev.target)) {
+            btn.dataset.confirming = '';
+            btn.innerHTML = origHTML;
+            btn.style.cssText = '';
+            document.removeEventListener('click', cancelFn, true);
+          }
+        };
+        setTimeout(() => document.addEventListener('click', cancelFn, true), 0);
+        return;
+      }
       const id = btn.dataset.id;
       await chrome.runtime.sendMessage({ type: 'DELETE_CONVERSATION', conversationId: id });
       state.conversations = state.conversations.filter(c => c.uuid !== id);
@@ -363,17 +414,40 @@ function renderHistory(convos) {
     });
   });
 
+  // Inline rename (convert title to input)
   list.querySelectorAll('.hi-rename').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const id = btn.dataset.id;
-      const current = btn.dataset.title;
-      const newName = prompt('Rename conversation:', current);
-      if (!newName || newName === current) return;
-      await chrome.runtime.sendMessage({ type: 'RENAME_CONVERSATION', conversationId: id, name: newName });
-      const convo = state.conversations.find(c => c.uuid === id);
-      if (convo) convo.name = newName;
-      renderHistory(state.conversations);
+      const item = btn.closest('.history-item');
+      const titleEl = item.querySelector('.hi-title');
+      if (titleEl.querySelector('input')) return;
+      const currentName = titleEl.textContent.trim();
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.value = currentName;
+      inp.className = 'hi-rename-input';
+      titleEl.textContent = '';
+      titleEl.appendChild(inp);
+      inp.focus();
+      inp.select();
+      let saved = false;
+      const save = async () => {
+        if (saved) return;
+        saved = true;
+        const newName = inp.value.trim() || currentName;
+        if (newName !== currentName) {
+          await chrome.runtime.sendMessage({ type: 'RENAME_CONVERSATION', conversationId: id, name: newName });
+          const convo = state.conversations.find(c => c.uuid === id);
+          if (convo) convo.name = newName;
+        }
+        renderHistory(state.conversations);
+      };
+      inp.addEventListener('keydown', ev => {
+        if (ev.key === 'Enter') { ev.preventDefault(); save(); }
+        else if (ev.key === 'Escape') { saved = true; renderHistory(state.conversations); }
+      });
+      inp.addEventListener('blur', save);
     });
   });
 }
@@ -478,7 +552,7 @@ function cleanUserMessage(text) {
   // Strip the page context header block if no explicit question marker
   // Handles both old format [I'm on the page:...] and new format [Page:...]
   const stripped = text
-    .replace(/^\[You are Claude Sidekick[\s\S]*?\[Page content:\][\s\S]*?\n\n/, '')
+    .replace(/^\[You are Parsely[\s\S]*?\[Page content:\][\s\S]*?\n\n/, '')
     .replace(/^\[I'm on the page:[\s\S]*?\[Page content:\][\s\S]*?\n\n/, '')
     .replace(/^\[Tab: "[^"]*"\][\s\S]*?\n\n/, '')
     .trim();
@@ -508,6 +582,9 @@ async function handleSend() {
 
   addMessage('user', input);
 
+  // Track title for auto-naming new conversations
+  if (!state.currentConvoId) state.pendingTitle = input.slice(0, 80);
+
   // Build full prompt with page context
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   let fullPrompt = input;
@@ -526,7 +603,7 @@ async function handleSend() {
     // Smart truncation: try to cut at paragraph boundary
     const pageText = smartTruncate(ctx.text || '', 20000);
 
-    fullPrompt = `[You are Claude Sidekick, an AI assistant embedded in the user's Chrome browser. Timezone: ${tz}. Be concise and use markdown formatting.]\n${metaBlock}\n[Page content:]\n${pageText}\n\n[My question:]\n${input}`;
+    fullPrompt = `[You are Parsely, a browser copilot embedded in the user's Chrome browser. Timezone: ${tz}. Be concise and use markdown formatting.]\n${metaBlock}\n[Page content:]\n${pageText}\n\n[My question:]\n${input}`;
   }
 
   // Add tab context
@@ -538,6 +615,16 @@ async function handleSend() {
         fullPrompt = `[Tab: "${tab.title}"]\n${tabText}\n\n${fullPrompt}`;
       }
     } catch {}
+  }
+
+  // Add attached file content
+  if (state.attachedFiles.length) {
+    const fileBlocks = state.attachedFiles.map(f =>
+      `[File: "${escHtml(f.name)}"]\n${smartTruncate(f.content, 15000)}`
+    ).join('\n\n');
+    fullPrompt = `${fileBlocks}\n\n${fullPrompt}`;
+    state.attachedFiles = [];
+    renderAttachmentPills();
   }
 
   await sendToClaude(fullPrompt);
@@ -574,11 +661,20 @@ async function sendToClaude(message) {
       contentDiv.innerHTML = renderMarkdown(fullText);
       $('#chat-messages').scrollTop = $('#chat-messages').scrollHeight;
     },
-    onDone: (fullText) => {
+    onDone: async (fullText) => {
       const rendered = fullText || 'No response received.';
       contentDiv.innerHTML = renderMarkdown(rendered);
       addCopyButton(msgDiv, rendered);
       state.isStreaming = false;
+      // Auto-name the conversation from the first message
+      if (state.pendingTitle && state.currentConvoId) {
+        const name = state.pendingTitle;
+        state.pendingTitle = null;
+        try {
+          await claudeClient.renameConversation(state.currentConvoId, name);
+          $('#convo-label').textContent = name;
+        } catch {}
+      }
     },
     onError: (err) => {
       contentDiv.innerHTML = renderErrorCard(err);
@@ -704,7 +800,8 @@ async function populateTabSelector() {
 function renderTabPills() {
   const pills = $('#tab-pills');
   pills.innerHTML = '';
-  if (!state.referencedTabs.length) { pills.classList.add('hidden'); return; }
+  const hasItems = state.referencedTabs.length || state.attachedFiles.length;
+  if (!hasItems) { pills.classList.add('hidden'); return; }
   pills.classList.remove('hidden');
   state.referencedTabs.forEach(tab => {
     const pill = document.createElement('div');
@@ -716,6 +813,29 @@ function renderTabPills() {
     });
     pills.appendChild(pill);
   });
+  state.attachedFiles.forEach((f, i) => {
+    const pill = document.createElement('div');
+    pill.className = 'tab-pill file-pill';
+    pill.innerHTML = `<span class="file-pill-icon">📄</span><span>${escHtml(f.name.slice(0,28))}</span><span class="rm" data-idx="${i}">×</span>`;
+    pill.querySelector('.rm').addEventListener('click', () => {
+      state.attachedFiles.splice(i, 1);
+      renderAttachmentPills();
+    });
+    pills.appendChild(pill);
+  });
+}
+
+function renderAttachmentPills() {
+  renderTabPills();
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsText(file);
+  });
 }
 
 // ─── UI Helpers ───
@@ -723,6 +843,12 @@ function addMessage(role, content, animate = true) {
   const div = document.createElement('div');
   div.className = `message message-${role}`;
   if (!animate) div.style.animation = 'none';
+  if (role === 'user') {
+    const label = document.createElement('div');
+    label.className = 'message-role-label';
+    label.textContent = 'You';
+    div.appendChild(label);
+  }
   const c = document.createElement('div');
   c.className = 'message-content';
   if (role === 'assistant') {

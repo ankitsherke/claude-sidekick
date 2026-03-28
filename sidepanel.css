@@ -1,5 +1,5 @@
 /* ============================================================
-   Claude Sidekick — Design System CSS
+   Parsely - Browser Copilot — Design System CSS
    Minimal. Black & White. Precision.
    ============================================================ */
 
@@ -429,16 +429,28 @@ body {
 .message-user,
 .msg-user { display: block; }
 
+/* "You" role label above user message */
+.message-role-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--text-tertiary);
+  padding-top: var(--space-xl);
+  border-top: 1px solid var(--border);
+  margin-bottom: var(--space-xs);
+}
+
 .message-user .message-content,
 .msg-user .msg-c {
   background: none;
-  padding: var(--space-xl) 0 0;
+  padding: 0 0 0 var(--space-md);
   border-radius: 0;
+  border-left: 2px solid var(--border-strong);
   max-width: 100%;
   font-size: 14px;
   color: var(--text-primary);
   line-height: 1.5;
-  border-top: 1px solid var(--border);
 }
 
 /* AI messages — identical rhythm to user messages */
@@ -1242,4 +1254,50 @@ body {
   border-radius: 20px;
   padding: 2px var(--space-md);
   margin: var(--space-xs) 0;
+}
+
+/* ── Inline rename input (history) ───────────────────────── */
+.hi-rename-input {
+  width: 100%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-xs);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+/* ── Project badge in history items ─────────────────────── */
+.hi-project {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+  margin-right: var(--space-xs);
+  font-family: var(--fm);
+}
+
+/* ── Page clear button (toolbar) ─────────────────────────── */
+.page-clear-btn {
+  padding: var(--space-xs) var(--space-sm) !important;
+  font-size: 14px !important;
+  line-height: 1;
+  color: var(--text-tertiary) !important;
+  border-color: transparent !important;
+  background: none !important;
+  min-width: 0;
+}
+.page-clear-btn:hover {
+  color: var(--text-primary) !important;
+  background: var(--bg-tertiary) !important;
+}
+
+/* ── File pill (attached file) ───────────────────────────── */
+.file-pill .file-pill-icon {
+  font-size: 12px;
 }
