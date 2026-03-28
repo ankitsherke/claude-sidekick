@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Parsely - Browser Copilot",
   "version": "2.1.0",
-  "description": "AI browser copilot powered by your claude.ai account. No API key needed. Read any page, ask questions, summarize, translate, review code, and access past chats.",
+  "description": "AI copilot using your claude.ai account. No API key needed. Ask questions, summarize, translate, and review code on any page.",
   "minimum_chrome_version": "116",
   "permissions": [
     "activeTab",
