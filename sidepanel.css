@@ -181,14 +181,7 @@ body {
 }
 .icon-btn:hover { background: var(--bg-tertiary); }
 
-.convo-label {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+
 
 /* ── Login Screen ─────────────────────────────────────────── */
 .screen {
@@ -929,18 +922,28 @@ body {
   color: var(--text-primary);
 }
 
-.h-item .h-date,
-.history-item .hi-date {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  margin-top: 2px;
-}
+
 
 /* Hide preview to keep layout clean */
 .h-item .h-preview { display: none; }
 
-.history-item .hi-info { min-width: 0; flex: 1; }
+.h-item .h-date,
+.history-item .hi-date {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
 
+.hi-tokens {
+  color: var(--text-secondary);
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.history-item .hi-info { min-width: 0; flex: 1; }
 .history-item .hi-actions {
   display: flex;
   gap: 2px;
@@ -998,37 +1001,7 @@ body {
   transition: border-color 200ms, color 200ms;
 }
 .session-status.ok  { border-color: var(--success); color: var(--success); }
-.session-status.err { border-color: var(--error);   color: var(--error); }
 
-.session-badge { display: none; }
-
-/* Buttons */
-.primary-btn {
-  background: var(--accent);
-  border: none;
-  border-radius: var(--radius);
-  color: var(--bg-primary);
-  padding: 7px var(--space-lg);
-  font-size: 13px;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  transition: opacity 150ms;
-}
-.primary-btn:hover { opacity: .8; }
-
-.secondary-btn {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text-secondary);
-  padding: 7px var(--space-lg);
-  font-size: 13px;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background 100ms;
-}
-.secondary-btn:hover { background: var(--bg-tertiary); }
 
 /* Custom skills list */
 .custom-skills-list { margin-top: var(--space-sm); display: flex; flex-direction: column; gap: var(--space-xs); }

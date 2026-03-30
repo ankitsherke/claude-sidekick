@@ -102,6 +102,20 @@ Responses stream token-by-token, just like on claude.ai.
 
 Full claude.ai conversation history accessible from the sidebar. Resume, rename, or delete any past chat.
 
+### Memory & Personalization
+
+Specify global custom instructions in **Settings** (e.g. "@Instructions Be concise"). These instructions are prepended to every message you send to Claude.
+
+### Hidden "Chat Recaps"
+
+To maintain deep context in long sessions without increasing token usage, the extension automatically stores a distilled "recap" of each conversation. This summary is invisibly injected into future prompts, providing continuity across devices without re-reading thousands of lines of history.
+
+**Strict Invisibility Layer**: Summaries are rigorously stripped from the UI in real-time. Even when copying text to your clipboard, the extension automatically purges all internal `<context>` recaps before saving the text.
+
+### TOON (Token Oriented Object Notation)
+
+Metadata and context recaps use **TOON** — a high-density, minimal syntax (`@Label Content`) designed to maximize token efficiency and character density for LLMs compared to traditional JSON.
+
 ---
 
 ## Install (2 minutes)
@@ -130,7 +144,6 @@ That's it. No API key, no configuration, no account creation.
 
 - Requires an active claude.ai session (Free or Pro)
 - Uses claude.ai's **unofficial** internal API — may break if Anthropic changes endpoints
-- Memory/personalization not yet implemented
 - Not available on the Chrome Web Store (developer mode only for now)
 
 ---
