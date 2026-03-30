@@ -12,7 +12,11 @@ let state = {
   projects: [],
   isStreaming: false,
   customSkills: [],
+  personalInstructions: '',
+  chatContexts: {}, // convoId -> summary
+  chatTokens: {}, // convoId -> number approx
   attachedFiles: [],
+  totalTokens: 0,
   pendingTitle: null
 };
 
@@ -33,16 +37,37 @@ function getAllSkills() {
   return [...SKILLS, ...state.customSkills];
 }
 
-// ─── Custom Skills Storage ───
-async function loadCustomSkills() {
-  const data = await chrome.storage.local.get('customSkills');
+// ─── Custom Skills & Personalization Storage ───
+async function loadSettings() {
+  const data = await chrome.storage.sync.get(['customSkills', 'personalInstructions', 'chatContexts', 'chatTokens']);
   state.customSkills = data.customSkills || [];
+  state.personalInstructions = data.personalInstructions || '';
+  state.chatContexts = data.chatContexts || {};
+  state.chatTokens = data.chatTokens || {};
+  
+  // Update UI if present
+  const piEl = $('#personal-instructions');
+  if (piEl) piEl.value = state.personalInstructions;
+  
   renderCustomSkillsList();
 }
 
 async function saveCustomSkills() {
-  await chrome.storage.local.set({ customSkills: state.customSkills });
+  await chrome.storage.sync.set({ customSkills: state.customSkills });
   renderCustomSkillsList();
+}
+
+async function savePersonalInstructions() {
+  state.personalInstructions = $('#personal-instructions').value;
+  await chrome.storage.sync.set({ personalInstructions: state.personalInstructions });
+}
+
+async function saveChatContexts() {
+  await chrome.storage.sync.set({ chatContexts: state.chatContexts });
+}
+
+async function saveChatTokens() {
+  await chrome.storage.sync.set({ chatTokens: state.chatTokens });
 }
 
 function renderCustomSkillsList() {
@@ -83,7 +108,7 @@ async function init() {
   const result = await claudeClient.init();
   if (result.success) {
     showMainScreen();
-    await Promise.all([loadPageContext(), loadCustomSkills()]);
+    await Promise.all([loadPageContext(), loadSettings()]);
     renderWelcome();
   } else {
     showLoginScreen();
@@ -99,8 +124,6 @@ function showLoginScreen() {
 function showMainScreen() {
   $('#login-screen').classList.add('hidden');
   $('#main-screen').classList.remove('hidden');
-  $('#session-badge').textContent = '● Connected to claude.ai';
-  $('#session-badge').classList.remove('disconnected');
 }
 
 // ─── Events ───
@@ -157,7 +180,6 @@ function setupEvents() {
     state.pendingTitle = null;
     $('#tab-pills').classList.add('hidden');
     $('#tab-pills').innerHTML = '';
-    $('#convo-label').textContent = '';
     renderAttachmentPills();
     renderWelcome();
   });
@@ -227,6 +249,21 @@ function setupEvents() {
     const panelId = btn.dataset.panel;
     if (panelId) $('#' + panelId)?.classList.add('hidden');
   });
+
+
+
+  // Personal Instructions Manual Save
+  const btnSavePI = $('#btn-save-personal');
+  if (btnSavePI) {
+    btnSavePI.addEventListener('click', async () => {
+      const orig = btnSavePI.textContent;
+      btnSavePI.textContent = 'Saving...';
+      btnSavePI.disabled = true;
+      await savePersonalInstructions();
+      btnSavePI.textContent = 'Saved!';
+      setTimeout(() => { btnSavePI.textContent = orig; btnSavePI.disabled = false; }, 2000);
+    });
+  }
 
   // Context menu / selection actions
   chrome.runtime.onMessage.addListener((msg) => {
@@ -471,10 +508,6 @@ async function loadConversation(convoId) {
     const convo = await claudeClient.getConversation(convoId);
     msgs.innerHTML = '';
 
-    if (convo.name) {
-      $('#convo-label').textContent = convo.name;
-    }
-
     (convo.chat_messages || []).forEach(m => {
       const role = m.sender === 'human' ? 'user' : 'assistant';
 
@@ -501,6 +534,9 @@ async function loadConversation(convoId) {
     });
 
     msgs.scrollTop = msgs.scrollHeight;
+    
+    // Refresh token usage display
+    await updateUsageDisplay();
   } catch (err) {
     msgs.innerHTML = `<div class="history-empty">Failed to load conversation</div>`;
   }
@@ -559,6 +595,16 @@ function cleanUserMessage(text) {
   return stripped || text.trim();
 }
 
+
+// ─── Token Usage Estimator ───
+function estimateTokens(text) {
+  if (!text) return 0;
+  // Heuristic: ~4 chars per token for English
+  return Math.max(1, Math.ceil(text.length / 4));
+}
+
+
+
 // ─── Send Message ───
 async function handleSend() {
   const input = $('#chat-input').value.trim();
@@ -585,25 +631,32 @@ async function handleSend() {
   // Track title for auto-naming new conversations
   if (!state.currentConvoId) state.pendingTitle = input.slice(0, 80);
 
-  // Build full prompt with page context
+  // Prepend Personalization/Memory
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  let systemContext = `@Parsely time:${tz}`;
+  if (state.personalInstructions) {
+    systemContext += `\n@Instructions ${state.personalInstructions}`;
+  }
+
   let fullPrompt = input;
   if (state.attachPage && state.pageContext) {
     const ctx = state.pageContext;
     const meta = ctx.meta || {};
 
     // Build metadata header with available info
-    let metaBlock = `[Page: "${meta.title}"]`;
-    metaBlock += `\n[URL: ${meta.url}]`;
-    if (meta.description) metaBlock += `\n[Description: ${meta.description}]`;
-    if (meta.author) metaBlock += `\n[Author: ${meta.author}]`;
-    if (meta.publishedDate) metaBlock += `\n[Published: ${meta.publishedDate}]`;
-    if (meta.type) metaBlock += `\n[Type: ${meta.type}]`;
+    let metaBlock = `@Page ${meta.title}`;
+    metaBlock += `\n@URL ${meta.url}`;
+    if (meta.description) metaBlock += `\n@Desc ${meta.description}`;
+    if (meta.author) metaBlock += `\n@Author ${meta.author}`;
+    if (meta.publishedDate) metaBlock += `\n@Date ${meta.publishedDate}`;
+    if (meta.type) metaBlock += `\n@Type ${meta.type}`;
 
     // Smart truncation: try to cut at paragraph boundary
     const pageText = smartTruncate(ctx.text || '', 20000);
 
-    fullPrompt = `[You are Parsely, a browser copilot embedded in the user's Chrome browser. Timezone: ${tz}. Be concise and use markdown formatting.]\n${metaBlock}\n[Page content:]\n${pageText}\n\n[My question:]\n${input}`;
+    fullPrompt = `${systemContext}\n${metaBlock}\n@Content\n${pageText}\n\n@Input\n${input}`;
+  } else {
+    fullPrompt = `${systemContext}\n\n@Input\n${input}`;
   }
 
   // Add tab context
@@ -612,7 +665,7 @@ async function handleSend() {
       const content = await chrome.runtime.sendMessage({ type: 'GET_TAB_CONTENT', tabId: tab.id });
       if (content && !content.error) {
         const tabText = smartTruncate(content.text || '', 10000);
-        fullPrompt = `[Tab: "${tab.title}"]\n${tabText}\n\n${fullPrompt}`;
+        fullPrompt = `@Tab ${tab.title}\n${tabText}\n\n${fullPrompt}`;
       }
     } catch {}
   }
@@ -620,7 +673,7 @@ async function handleSend() {
   // Add attached file content
   if (state.attachedFiles.length) {
     const fileBlocks = state.attachedFiles.map(f =>
-      `[File: "${escHtml(f.name)}"]\n${smartTruncate(f.content, 15000)}`
+      `@File ${escHtml(f.name)}\n${smartTruncate(f.content, 15000)}`
     ).join('\n\n');
     fullPrompt = `${fileBlocks}\n\n${fullPrompt}`;
     state.attachedFiles = [];
@@ -633,12 +686,23 @@ async function handleSend() {
 async function sendToClaude(message) {
   state.isStreaming = true;
 
+  // ─── Injection ───
+  // Prepend previous context if available
+  let processedMessage = message;
+  const currentContext = state.chatContexts[state.currentConvoId];
+  if (currentContext) {
+    processedMessage = `@Recap ${currentContext}\n\n${processedMessage}`;
+  }
+
+  // Append instruction to update context (hidden from user)
+  processedMessage += `\n\n[IMPORTANT: At the end of your response, provide high-density context updates using TOON (Token Oriented Object Notation) like "@Recap key facts..." inside <context> tags.]`;
+
+
   // Create conversation if needed
   if (!state.currentConvoId) {
     try {
       const convo = await claudeClient.createConversation();
       state.currentConvoId = convo.uuid;
-      $('#convo-label').textContent = 'New chat';
     } catch (err) {
       addMessage('assistant', `⚠️ Failed to create conversation: ${err.message}`);
       state.isStreaming = false;
@@ -656,15 +720,16 @@ async function sendToClaude(message) {
   $('#chat-messages').appendChild(msgDiv);
   $('#chat-messages').scrollTop = $('#chat-messages').scrollHeight;
 
-  await claudeClient.sendMessage(state.currentConvoId, message, {
+  await claudeClient.sendMessage(state.currentConvoId, processedMessage, {
     onText: (fullText) => {
       contentDiv.innerHTML = renderMarkdown(fullText);
       $('#chat-messages').scrollTop = $('#chat-messages').scrollHeight;
     },
     onDone: async (fullText) => {
       const rendered = fullText || 'No response received.';
-      contentDiv.innerHTML = renderMarkdown(rendered);
-      addCopyButton(msgDiv, rendered);
+      const stripped = renderMarkdown(rendered);
+      contentDiv.innerHTML = stripped;
+      addCopyButton(msgDiv, rendered); // We will strip it inside addCopyButton
       state.isStreaming = false;
       // Auto-name the conversation from the first message
       if (state.pendingTitle && state.currentConvoId) {
@@ -672,9 +737,19 @@ async function sendToClaude(message) {
         state.pendingTitle = null;
         try {
           await claudeClient.renameConversation(state.currentConvoId, name);
-          $('#convo-label').textContent = name;
         } catch {}
       }
+      
+      // ─── Extraction ───
+      // Extract hidden context and save
+      const ctxMatch = fullText.match(/<context>([\s\S]*?)<\/context>/);
+      if (ctxMatch && state.currentConvoId) {
+        state.chatContexts[state.currentConvoId] = ctxMatch[1].trim();
+        saveChatContexts();
+      }
+      
+      // Update tokens after done
+      await updateUsageDisplay();
     },
     onError: (err) => {
       contentDiv.innerHTML = renderErrorCard(err);
@@ -683,13 +758,17 @@ async function sendToClaude(message) {
   });
 }
 
+
+
 function addCopyButton(msgDiv, rawText) {
   const btn = document.createElement('button');
   btn.className = 'msg-copy-btn';
   btn.title = 'Copy';
   btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
   btn.addEventListener('click', () => {
-    navigator.clipboard.writeText(rawText).then(() => {
+    // Strip hidden context recap before copying
+    const cleanText = rawText.replace(/<context>[\s\S]*?<\/context>/g, '').trim();
+    navigator.clipboard.writeText(cleanText).then(() => {
       btn.innerHTML = '✓';
       setTimeout(() => {
         btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
@@ -907,6 +986,12 @@ function renderArtifactCard(input) {
 // ─── Markdown Renderer ───
 function renderMarkdown(text) {
   if (!text) return '';
+  
+  // ─── Hiding context tags ───
+  let s = text
+    .replace(/<context>[\s\S]*?<\/context>/g, '') // strip complete tags
+    .replace(/<context>[\s\S]*$/g, '')            // strip partial/trailing tags mid-stream
+    .trim();
 
   // 0. Extract sentinels BEFORE HTML escaping so content isn't mangled.
 
@@ -914,8 +999,9 @@ function renderMarkdown(text) {
   const toolCounts = [];
   // Artifact cards (from streaming / content blocks)
   const artifacts = [];
+  const saved = [];
 
-  let s = text
+  s = s
     .replace(/\x01TOOLS:(\d+)\x01/g, (_, n) => {
       const i = toolCounts.length;
       toolCounts.push(parseInt(n, 10));
@@ -932,7 +1018,6 @@ function renderMarkdown(text) {
   s = s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
   // 2. Extract code blocks (protect content from further processing)
-  const saved = [];
   s = s.replace(/```[\w]*\n?([\s\S]*?)```/g, (_, code) => {
     const i = saved.length;
     saved.push(`<pre><code>${code}</code></pre>`);
@@ -1084,6 +1169,14 @@ function renderErrorCard(raw) {
 }
 
 function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function debounce(fn, ms) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), ms);
+  };
+}
 
 // ─── Start ───
 init();
